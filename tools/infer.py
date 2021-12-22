@@ -8,6 +8,8 @@ path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..')
 if path not in sys.path:
     sys.path.insert(0, path)
 
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+
 import argparse
 import pprint
 import shutil

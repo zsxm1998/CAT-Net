@@ -14,6 +14,8 @@ path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..')
 if path not in sys.path:
     sys.path.insert(0, path)
 
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+
 import argparse
 import pprint
 import shutil
@@ -153,8 +155,7 @@ def main():
     else:
         raise ValueError('Only Support SGD optimizer')
 
-    epoch_iters = np.int(train_dataset.__len__() /
-                         config.TRAIN.BATCH_SIZE_PER_GPU / len(gpus))
+    epoch_iters = int(train_dataset.__len__() / config.TRAIN.BATCH_SIZE_PER_GPU / len(gpus))
     best_p_mIoU = 0
     last_epoch = 0
     if config.TRAIN.RESUME:

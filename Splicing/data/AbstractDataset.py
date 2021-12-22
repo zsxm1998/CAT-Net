@@ -160,7 +160,7 @@ class AbstractDataset(ABC):
             if 'DCTcoef' in self._blocks or 'DCTvol' in self._blocks or 'rawRGB' in self._blocks:
                 for i in range(self.DCT_channels):
                     DCT_coef[i] = DCT_coef[i][s_r:s_r+crop_size[0], s_c:s_c+crop_size[1]]
-                t_DCT_coef = torch.tensor(DCT_coef, dtype=torch.float)  # final (but used below)
+                t_DCT_coef = torch.tensor(np.array(DCT_coef), dtype=torch.float)  # final (but used below)
 
         # handle 'RGB'
         if 'RGB' in self._blocks:
@@ -197,7 +197,7 @@ class AbstractDataset(ABC):
         if 'qtable' not in self._blocks:
             return tensor, torch.tensor(mask, dtype=torch.long), 0
         else:
-            return tensor, torch.tensor(mask, dtype=torch.long), torch.tensor(qtables[:self.DCT_channels], dtype=torch.float)
+            return tensor, torch.tensor(mask, dtype=torch.long), torch.tensor(np.array(qtables[:self.DCT_channels]), dtype=torch.float)
 
     @abstractmethod
     def get_tamp(self, index):
