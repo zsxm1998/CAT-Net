@@ -5,3 +5,4 @@ log/
 *.tar
 *.log
 output_pred/
+input/
