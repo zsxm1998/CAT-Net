@@ -165,7 +165,7 @@ def main():
                 # plt.close(fig)
                 ori_img = np.float32(Image.open(get_next_filename(index)[1])) / 255
                 heatmap = cv2.cvtColor(cv2.applyColorMap(np.uint8(pred*255), cv2.COLORMAP_JET), cv2.COLOR_BGR2RGB)
-                heatmap = np.float32(cv2.resize(heatmap, dsize=ori_img.shape[:2], interpolation=cv2.INTER_LINEAR)) / 255
+                heatmap = np.float32(cv2.resize(heatmap, dsize=(ori_img.shape[1], ori_img.shape[0]), interpolation=cv2.INTER_LINEAR)) / 255
                 heatmap = Image.fromarray(np.uint8((heatmap + ori_img) / 2 * 255))
                 heatmap.save(heatmappath)
             except:
