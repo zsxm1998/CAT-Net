@@ -60,7 +60,7 @@ def train(config, epoch, num_epoch, epoch_iters, base_lr, num_iters,
         images = images.cuda()
         labels = labels.long().cuda()
 
-        losses, _ = model(images, labels, qtable)  # _ : output of the model (see utils.py)
+        losses, preds = model(images, labels, qtable)  # _ : output of the model (see utils.py)
         loss = losses.mean()
 
         reduced_loss = reduce_tensor(loss)
@@ -90,6 +90,9 @@ def train(config, epoch, num_epoch, epoch_iters, base_lr, num_iters,
             logging.info(msg)
             
             writer.add_scalar('train_loss', print_loss, global_steps)
+            writer.add_images('train/images', images[:, :3], global_steps)
+            writer.add_images('train/labels', labels.unsqueeze(1).float(), global_steps)
+            writer.add_images('train/preds', preds.argmax(dim=1, keepdim=True).float(), global_steps)
             global_steps += 1
             writer_dict['train_global_steps'] = global_steps
 
@@ -105,8 +108,11 @@ def validate(config, testloader, model, writer_dict, valid_set="valid"):
     avg_mIoU = AverageMeter()
     avg_p_mIoU = AverageMeter()
 
+    images_list = []
+    labels_list = []
+    preds_list = []
     with torch.no_grad():
-        for _, (image, label, qtable) in enumerate(tqdm(testloader)):
+        for i, (image, label, qtable) in enumerate(tqdm(testloader)):
             size = label.size()
             image = image.cuda()
             label = label.long().cuda()
@@ -138,6 +144,10 @@ def validate(config, testloader, model, writer_dict, valid_set="valid"):
             TP = current_confusion_matrix[1, 1]
             p_mIoU = 0.5 * (FN / np.maximum(1.0, FN + TP + TN)) + 0.5 * (FP / np.maximum(1.0, FP + TP + TN))
             avg_p_mIoU.update(np.maximum(mean_IoU, p_mIoU))
+            if i % (len(testloader) // 4) == 0 or i == len(testloader)-1:
+                images_list.append(image)
+                labels_list.append(label.unsqueeze(1).float())
+                preds_list.append(pred)
 
     confusion_matrix = torch.from_numpy(confusion_matrix).cuda()
     reduced_confusion_matrix = reduce_tensor(confusion_matrix)
@@ -160,6 +170,16 @@ def validate(config, testloader, model, writer_dict, valid_set="valid"):
         writer.add_scalar(valid_set+'_avg_mIoU', avg_mIoU.average(), global_steps)
         writer.add_scalar(valid_set+'_avg_p-mIoU', avg_p_mIoU.average(), global_steps)
         writer.add_scalar(valid_set+'_pixel_acc', pixel_acc, global_steps)
+        for i in range(len(images_list)):
+            images_list[i] = F.interpolate(images_list[i], size=(512,512), mode='bilinear')
+            labels_list[i] = F.interpolate(labels_list[i], size=(512,512), mode='bilinear')
+            preds_list[i] = F.interpolate(preds_list[i], size=(512,512), mode='bilinear')
+        images = torch.cat(images_list, dim=0)
+        labels = torch.cat(labels_list, dim=0)
+        preds = torch.cat(preds_list, dim=0)
+        writer.add_images('valid/images', images[:, :3], global_steps)
+        writer.add_images('valid/labels', labels, global_steps)
+        writer.add_images('valid/preds', preds.argmax(dim=1, keepdim=True).float(), global_steps)
         writer_dict['valid_global_steps'] = global_steps + 1
     return print_loss, mean_IoU, avg_mIoU.average(), avg_p_mIoU.average(), IoU_array, pixel_acc, mean_acc, confusion_matrix
 

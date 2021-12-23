@@ -3,10 +3,14 @@ Created by Myung-Joon Kwon
 mjkwon2021@gmail.com
 July 14, 2020
 """
+import os
+import sys
+path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../..')
+if path not in sys.path:
+    sys.path.insert(0, path)
 import project_config
 from Splicing.data.AbstractDataset import AbstractDataset
 
-import os
 import numpy as np
 import random
 from PIL import Image, ImageChops, ImageFilter

@@ -14,8 +14,6 @@ path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..')
 if path not in sys.path:
     sys.path.insert(0, path)
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
-
 import argparse
 import pprint
 import shutil
@@ -74,6 +72,13 @@ def main():
 
     update_config(config, args)
 
+    gpus = list(config.GPUS)
+    gpu_env_str = ''
+    for i, gpu in enumerate(gpus):
+        if i > 0: gpu_env_str += ','
+        gpu_env_str += str(gpu)
+    os.environ['CUDA_VISIBLE_DEVICES'] = gpu_env_str
+
     logger, final_output_dir, tb_log_dir = create_logger(
         config, args.cfg, 'train')
 
@@ -95,8 +100,7 @@ def main():
         'valid_global_steps': 0,
     }
 
-    gpus = list(config.GPUS)
-    model = torch.nn.DataParallel(model, device_ids=gpus).cuda()
+    model = torch.nn.DataParallel(model).cuda()
 
     # prepare data
     crop_size = (config.TRAIN.IMAGE_SIZE[1], config.TRAIN.IMAGE_SIZE[0])
@@ -185,9 +189,9 @@ def main():
               epoch_iters, config.TRAIN.LR, num_iters,
               trainloader, optimizer, model, writer_dict, final_output_dir)
 
-        torch.cuda.empty_cache()
-        gc.collect()
-        time.sleep(3.0)
+        #torch.cuda.empty_cache()
+        #gc.collect()
+        #time.sleep(3.0)
 
         # Valid
         if epoch % 10 == 0 or (epoch >= 80 and epoch % 5 == 0) or epoch >= 120:
@@ -196,9 +200,9 @@ def main():
             valid_loss, mean_IoU, avg_mIoU, avg_p_mIoU, IoU_array, pixel_acc, mean_acc, confusion_matrix = \
                 validate(config, validloader, model, writer_dict, "valid")
 
-            torch.cuda.empty_cache()
-            gc.collect()
-            time.sleep(3.0)
+            #torch.cuda.empty_cache()
+            #gc.collect()
+            #time.sleep(3.0)
 
             if avg_p_mIoU > best_p_mIoU:
                 best_p_mIoU = avg_p_mIoU

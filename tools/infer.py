@@ -4,20 +4,22 @@
  June 7, 2021
 """
 import sys, os
+
+from seaborn.matrix import heatmap
 path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..')
 if path not in sys.path:
     sys.path.insert(0, path)
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
-
 import argparse
 import pprint
 import shutil
+import  traceback
 
 import logging
 import time
 import timeit
-from pathlib import Path
+from PIL import Image
+import cv2
 
 import numpy as np
 from tqdm import tqdm
@@ -64,9 +66,16 @@ def main():
     # Instead of using argparse, force these args:
 
     ## CHOOSE ##
-    args = argparse.Namespace(cfg='experiments/CAT_full.yaml', opts=['TEST.MODEL_FILE', 'output/splicing_dataset/CAT_full/CAT_full_v1.pth.tar', 'TEST.FLIP_TEST', 'False', 'TEST.NUM_SAMPLES', '0'])
+    args = argparse.Namespace(cfg='experiments/CAT_full.yaml', opts=['TEST.MODEL_FILE', 'output/splicing_dataset/CAT_full/best.pth.tar', 'TEST.FLIP_TEST', 'False', 'TEST.NUM_SAMPLES', '0'])
     # args = argparse.Namespace(cfg='experiments/CAT_DCT_only.yaml', opts=['TEST.MODEL_FILE', 'output/splicing_dataset/CAT_DCT_only/DCT_only_v2.pth.tar', 'TEST.FLIP_TEST', 'False', 'TEST.NUM_SAMPLES', '0'])
     update_config(config, args)
+
+    gpus = list(config.GPUS)
+    gpu_env_str = ''
+    for i, gpu in enumerate(gpus):
+        if i > 0: gpu_env_str += ','
+        gpu_env_str += str(gpu)
+    os.environ['CUDA_VISIBLE_DEVICES'] = gpu_env_str
 
     # cudnn related setting
     cudnn.benchmark = config.CUDNN.BENCHMARK
@@ -107,10 +116,10 @@ def main():
     checkpoint = torch.load(model_state_file)
     model.model.load_state_dict(checkpoint['state_dict'])
     print("Epoch: {}".format(checkpoint['epoch']))
-    gpus = list(config.GPUS)
-    model = nn.DataParallel(model, device_ids=gpus).cuda()
+    model = nn.DataParallel(model).cuda()
 
     dataset_paths['SAVE_PRED'].mkdir(parents=True, exist_ok=True)
+    (dataset_paths['SAVE_PRED'] / 'heatmap').mkdir(parents=True, exist_ok=True)
 
 
     def get_next_filename(i):
@@ -121,9 +130,9 @@ def main():
                 i -= len(dataset_list[it])
                 it += 1
                 continue
-            name = dataset_list[it].get_tamp_name(i)
-            name = os.path.split(name)[-1]
-            return name
+            path = dataset_list[it].get_tamp_name(i)
+            name = os.path.split(path)[-1]
+            return name, path
 
     with torch.no_grad():
         for index, (image, label, qtable) in enumerate(tqdm(testloader)):
@@ -134,24 +143,34 @@ def main():
             _, pred = model(image, label, qtable)
             pred = torch.squeeze(pred, 0)
             pred = F.softmax(pred, dim=0)[1]
+            pred_binary = ((pred>0.5).byte()*255).cpu().numpy()
             pred = pred.cpu().numpy()
 
             # filename
-            filename = os.path.splitext(get_next_filename(index))[0] + ".png"
+            filename = os.path.splitext(get_next_filename(index)[0])[0] + ".png"
             filepath = dataset_paths['SAVE_PRED'] / filename
+            heatmappath = dataset_paths['SAVE_PRED'] / 'heatmap' / filename
 
             # plot
             try:
-                width = pred.shape[1]  # in pixels
-                fig = plt.figure(frameon=False)
-                dpi = 40  # fig.dpi
-                fig.set_size_inches(width / dpi, ((width * pred.shape[0])/pred.shape[1]) / dpi)
-                sns.heatmap(pred, vmin=0, vmax=1, cbar=False, cmap='jet', )
-                plt.axis('off')
-                plt.savefig(filepath, bbox_inches='tight', transparent=True, pad_inches=0)
-                plt.close(fig)
+                img = Image.fromarray(pred_binary)
+                img.save(filepath)
+                # width = pred.shape[1]  # in pixels
+                # fig = plt.figure(frameon=False)
+                # dpi = 40  # fig.dpi
+                # fig.set_size_inches(width / dpi, ((width * pred.shape[0])/pred.shape[1]) / dpi)
+                # sns.heatmap(pred, vmin=0, vmax=1, cbar=False, cmap='jet', )
+                # plt.axis('off')
+                # plt.savefig(heatmappath, bbox_inches='tight', transparent=True, pad_inches=0)
+                # plt.close(fig)
+                ori_img = np.float32(Image.open(get_next_filename(index)[1])) / 255
+                heatmap = cv2.cvtColor(cv2.applyColorMap(np.uint8(pred*255), cv2.COLORMAP_JET), cv2.COLOR_BGR2RGB)
+                heatmap = np.float32(cv2.resize(heatmap, dsize=ori_img.shape[:2], interpolation=cv2.INTER_LINEAR)) / 255
+                heatmap = Image.fromarray(np.uint8((heatmap + ori_img) / 2 * 255))
+                heatmap.save(heatmappath)
             except:
-                print(f"Error occurred while saving output. ({get_next_filename(index)})")
+                print(f"Error occurred while saving output. ({get_next_filename(index)[1]})")
+                traceback.print_exc()
 
 if __name__ == '__main__':
     main()
